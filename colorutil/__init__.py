@@ -1,1 +1,1 @@
-from colorutil import *
+from colorutil.colorutil import *

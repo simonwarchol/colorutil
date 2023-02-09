@@ -93,7 +93,7 @@ def xyzd65_to_xyzd50(c):
 # const vec3 tristimulus_to_xyzd50_1062606552 = (vec3(
 # 0.96422, 1, 0.82521
 # ));
-
+#
 M_TRISTIMULUS_TO_XYZD50 = np.array([0.96422, 1, 0.82521], dtype=np.float64)
 
 
@@ -108,6 +108,28 @@ def xyzd50_to_lab(c):
     fx = f_1(c[..., 0] / M_TRISTIMULUS_TO_XYZD50[0])
     fy = f_1(c[..., 1] / M_TRISTIMULUS_TO_XYZD50[1])
     fz = f_1(c[..., 2] / M_TRISTIMULUS_TO_XYZD50[2])
+    lab = np.empty(c.shape)
+    lab[..., 0] = 116.0 * fy - 16.0
+    lab[..., 1] = 500.0 * (fx - fy)
+    lab[..., 2] = 200.0 * (fy - fz)
+    return lab
+
+
+# 0.95047 1.00000 1.08883
+M_TRISTIMULUS_TO_XYZD65 = np.array([0.95047, 1, 1.08883], dtype=np.float64)
+
+
+@jit(nopython=True, fastmath=True, cache=True)
+def xyzd65_to_lab(c):
+    def f_1(t):
+        if t > 0.00885645167903563082:
+            return t ** (1.0 / 3.0)
+        else:
+            return 7.78703703703703704 * t + 16.0 / 116.0
+
+    fx = f_1(c[..., 0] / M_TRISTIMULUS_TO_XYZD65[0])
+    fy = f_1(c[..., 1] / M_TRISTIMULUS_TO_XYZD65[1])
+    fz = f_1(c[..., 2] / M_TRISTIMULUS_TO_XYZD65[2])
     lab = np.empty(c.shape)
     lab[..., 0] = 116.0 * fy - 16.0
     lab[..., 1] = 500.0 * (fx - fy)
@@ -133,9 +155,32 @@ def lab_to_xyzd50(c):
     return xyzd50
 
 
-def xyz_to_lab(c):
+@jit(nopython=True, fastmath=True, cache=True)
+def lab_to_xyzd65(c):
+    def f_2(t):
+        if t > 0.20689655172413793103:
+            return t ** 3
+        else:
+            return (t - 16.0 / 116.0) / 7.78703703703703704
+
+    fy = (c[..., 0] + 16.0) / 116.0
+    fx = c[..., 1] / 500.0 + fy
+    fz = fy - c[..., 2] / 200.0
+    xyzd65 = np.empty(c.shape)
+    xyzd65[..., 0] = M_TRISTIMULUS_TO_XYZD65[0] * f_2(fx)
+    xyzd65[..., 1] = M_TRISTIMULUS_TO_XYZD65[1] * f_2(fy)
+    xyzd65[..., 2] = M_TRISTIMULUS_TO_XYZD65[2] * f_2(fz)
+    return xyzd65
+
+
+def xyz_to_lab_d50(c):
     xyzd50 = xyzd65_to_xyzd50(c)
-    lab = xyzd50_to_lab(xyzd50)
+    lab = xyzd50_to_lab(c)
+    return lab
+
+
+def xyz_to_lab_d65(c):
+    lab = xyzd65_to_lab(c)
     return lab
 
 
@@ -161,22 +206,66 @@ def xyz_to_lrgb(c):
     return np.dot(c, M_XYZ_TO_LRGB)
 
 
-def lab_to_xyz(c):
+def labd50_to_xyz(c):
     xyzd50 = lab_to_xyzd50(c)
     xyzd65 = xyzd50_to_xyzd65(xyzd50)
     return xyzd65
 
 
-# if __name__ == '__main__':
-#     tmp = srgb_to_lrgb(np.array([1, 0, 0]))
-#     print(tmp)
-#     tmp = lrgb_to_xyz(tmp)
-#     print(tmp)
-#     tmp = xyz_to_lab(tmp)
-#     print(tmp)
-#     tmp = lab_to_xyz(tmp)
-#     print(tmp)
-#     tmp = xyz_to_lrgb(tmp)
-#     print(tmp)
-#     tmp = lrgb_to_srgb(tmp)
-#     print(tmp)
+def labd65_to_xyz(c):
+    return lab_to_xyzd65(c)
+
+
+def lab_to_xyz(c):
+    return lab_to_xyzd65(c)
+
+
+def srgb_to_xyz(c):
+    c = np.array(c)
+    lrgb = srgb_to_lrgb(c)
+    xyz = lrgb_to_xyz(lrgb)
+    return xyz
+
+
+def srgb_to_lab(c):
+    c = np.array(c)
+    xyz = srgb_to_xyz(c)
+    lab = xyz_to_lab(xyz)
+    return lab
+
+
+def xyz_to_srgb(c):
+    c = np.array(c)
+    lrgb = xyz_to_lrgb(c)
+    srgb = lrgb_to_srgb(lrgb)
+    return srgb
+
+
+def lab_to_srgb(c):
+    c = np.array(c)
+    xyz = lab_to_xyz(c)
+    srgb = xyz_to_srgb(xyz)
+    return srgb
+
+
+def xyz_to_lab(c):
+    return xyz_to_lab_d65(c)
+
+
+#
+
+# [ 47.98194319  -3.19681298 -39.3202402 ]
+if __name__ == '__main__':
+    #     # print (np.array([0.12156863, 0.46666667, 0.70588235]))
+    tmp = srgb_to_lrgb(np.array([0.12156863, 0.46666667, 0.70588235]))
+    print(tmp)
+    tmp = lrgb_to_xyz(tmp)
+    print(tmp)
+    tmp = xyz_to_lab(tmp)
+    print(tmp)
+    tmp = lab_to_xyz(tmp)
+    print(tmp)
+    tmp = xyz_to_lrgb(tmp)
+    print(tmp)
+    tmp = lrgb_to_srgb(tmp)
+    print(tmp)
