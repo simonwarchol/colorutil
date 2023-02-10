@@ -100,10 +100,7 @@ M_TRISTIMULUS_TO_XYZD50 = np.array([0.96422, 1, 0.82521], dtype=np.float64)
 @jit(nopython=True, fastmath=True, cache=True)
 def xyzd50_to_lab(c):
     def f_1(t):
-        if t > 0.00885645167903563082:
-            return t ** (1.0 / 3.0)
-        else:
-            return 7.78703703703703704 * t + 16.0 / 116.0
+        return np.where(t > 0.00885645167903563082, t ** (1.0 / 3.0), 7.78703703703703704 * t + 16.0 / 116.0)
 
     fx = f_1(c[..., 0] / M_TRISTIMULUS_TO_XYZD50[0])
     fy = f_1(c[..., 1] / M_TRISTIMULUS_TO_XYZD50[1])
@@ -122,10 +119,7 @@ M_TRISTIMULUS_TO_XYZD65 = np.array([0.95047, 1, 1.08883], dtype=np.float64)
 @jit(nopython=True, fastmath=True, cache=True)
 def xyzd65_to_lab(c):
     def f_1(t):
-        if t > 0.00885645167903563082:
-            return t ** (1.0 / 3.0)
-        else:
-            return 7.78703703703703704 * t + 16.0 / 116.0
+        return np.where(t > 0.00885645167903563082, t ** (1.0 / 3.0), 7.78703703703703704 * t + 16.0 / 116.0)
 
     fx = f_1(c[..., 0] / M_TRISTIMULUS_TO_XYZD65[0])
     fy = f_1(c[..., 1] / M_TRISTIMULUS_TO_XYZD65[1])
@@ -140,10 +134,7 @@ def xyzd65_to_lab(c):
 @jit(nopython=True, fastmath=True, cache=True)
 def lab_to_xyzd50(c):
     def f_2(t):
-        if t > 0.20689655172413793103:
-            return t ** 3
-        else:
-            return (t - 16.0 / 116.0) / 7.78703703703703704
+        return np.where(t > 0.20689655172413793103, t ** 3, (t - 16.0 / 116.0) / 7.78703703703703704)
 
     fy = (c[..., 0] + 16.0) / 116.0
     fx = c[..., 1] / 500.0 + fy
@@ -158,10 +149,7 @@ def lab_to_xyzd50(c):
 @jit(nopython=True, fastmath=True, cache=True)
 def lab_to_xyzd65(c):
     def f_2(t):
-        if t > 0.20689655172413793103:
-            return t ** 3
-        else:
-            return (t - 16.0 / 116.0) / 7.78703703703703704
+        return np.where(t > 0.20689655172413793103, t ** 3, (t - 16.0 / 116.0) / 7.78703703703703704)
 
     fy = (c[..., 0] + 16.0) / 116.0
     fx = c[..., 1] / 500.0 + fy
@@ -330,7 +318,6 @@ def my_ciede2000(c1, c2):
     c1 = np.array(c1)
     c2 = np.array(c2)
     return _ciede2000(c1, c2)
-
 
 #
 #
