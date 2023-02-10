@@ -240,13 +240,21 @@ def xyz_to_lab(c):
     return xyz_to_lab_d65(c)
 
 
+
+
+def ciede2000(c1, c2):
+    c1 = np.array(c1).reshape(-1, 3)
+    c2 = np.asarray(c2).reshape(-1, 3)
+    return _ciede2000(c1, c2)
+
+
 # Adapted from https://github.com/lovro-i/CIEDE2000/blob/master/ciede2000.py
 # via The CIEDE2000 Color-Difference Formula: Implementation Notes, Supplementary Test Data, and Mathematical Observations
 # Gaurav Sharma, Wencheng Wu, Edul N. Dalal
 @jit(nopython=True, fastmath=True, cache=True)
 def _ciede2000(lab_c1, lab_c2):
-    L1, a1, b1 = lab_c1[0], lab_c1[1], lab_c1[2]
-    L2, a2, b2 = lab_c2[0], lab_c2[1], lab_c2[2]
+    L1, a1, b1 = lab_c1[:, 0], lab_c1[:, 1], lab_c1[:, 2]
+    L2, a2, b2 = lab_c2[:, 0], lab_c2[:, 1], lab_c2[:, 2]
     C1 = np.sqrt(a1 ** 2 + b1 ** 2)
     C2 = np.sqrt(a2 ** 2 + b2 ** 2)
     C_ave = (C1 + C2) / 2
@@ -256,49 +264,63 @@ def _ciede2000(lab_c1, lab_c2):
     b1_, b2_ = b1, b2
     C1_ = np.sqrt(a1_ ** 2 + b1_ ** 2)
     C2_ = np.sqrt(a2_ ** 2 + b2_ ** 2)
-    if b1_ == 0 and a1_ == 0:
-        h1_ = 0
-    elif a1_ >= 0:
-        h1_ = np.arctan2(b1_, a1_)
-    else:
-        h1_ = np.arctan2(b1_, a1_) + 2 * np.pi
+    h1_ = np.zeros_like(C1_)
 
-    if b2_ == 0 and a2_ == 0:
-        h2_ = 0
-    elif a2_ >= 0:
-        h2_ = np.arctan2(b2_, a2_)
-    else:
-        h2_ = np.arctan2(b2_, a2_) + 2 * np.pi
+    # np where b1_ == 0 and a1_ == 0:
+    h1_ = np.where(np.logical_and(a1_ == 0, b1_ == 0), 0,
+                   np.where(a1_ >= 0, np.arctan2(b1_, a1_), np.arctan2(b1_, a1_) + 2 * np.pi))
+
+    # if b1_ == 0 and a1_ == 0:
+    #     h1_ = 0
+    # elif a1_ >= 0:
+    #     h1_ = np.arctan2(b1_, a1_)
+    # else:
+    #     h1_ = np.arctan2(b1_, a1_) + 2 * np.pi
+    #
+    h2_ = np.zeros_like(C2_)
+    h2_ = np.where(np.logical_and(a2_ == 0, b2_ == 0), 0,
+                   np.where(a2_ >= 0, np.arctan2(b2_, a2_), np.arctan2(b2_, a2_) + 2 * np.pi))
+
+    # if b2_ == 0 and a2_ == 0:
+    #     h2_ = 0
+    # elif a2_ >= 0:
+    #     h2_ = np.arctan2(b2_, a2_)
+    # else:
+    #     h2_ = np.arctan2(b2_, a2_) + 2 * np.pi
     dL_ = L2_ - L1_
     dC_ = C2_ - C1_
     dh_ = h2_ - h1_
-    if C1_ * C2_ == 0:
-        dh_ = 0
-    elif dh_ > np.pi:
-        dh_ -= 2 * np.pi
-    elif dh_ < -np.pi:
-        dh_ += 2 * np.pi
+
+    dh_ = np.where(np.logical_or(C1_ == 0, C2_ == 0), 0,
+                   np.where(dh_ > np.pi, dh_ - 2 * np.pi, np.where(dh_ < -np.pi, dh_ + 2 * np.pi, dh_)))
+
+    # if C1_ * C2_ == 0:
+    #     dh_ = 0
+    # elif dh_ > np.pi:
+    #     dh_ -= 2 * np.pi
+    # elif dh_ < -np.pi:
+    #     dh_ += 2 * np.pi
     dH_ = 2 * np.sqrt(C1_ * C2_) * np.sin(dh_ / 2)
     L_ave = (L1_ + L2_) / 2
     C_ave = (C1_ + C2_) / 2
     _dh = np.abs(h1_ - h2_)
     _sh = h1_ + h2_
     C1C2 = C1_ * C2_
-    if _dh <= np.pi and C1C2 != 0:
-        h_ave = (h1_ + h2_) / 2
-    elif _dh > np.pi and _sh < 2 * np.pi and C1C2 != 0:
-        h_ave = (h1_ + h2_) / 2 + np.pi
-    elif _dh > np.pi and _sh >= 2 * np.pi and C1C2 != 0:
-        h_ave = (h1_ + h2_) / 2 - np.pi
-    else:
-        h_ave = h1_ + h2_
+    h_ave = h1_ + h2_
+
+    h_ave = np.where(np.logical_and(C1C2 != 0, _dh <= np.pi), h_ave / 2,
+                     np.where(np.logical_and(C1C2 != 0, np.logical_and(_dh > np.pi, _sh < 2 * np.pi)), h_ave / 2 + np.pi,
+                              np.where(np.logical_and(C1C2 != 0, np.logical_and(_dh > np.pi, _sh >= 2 * np.pi)),
+                                       h_ave / 2 - np.pi, h_ave)))
+
     T = 1 - 0.17 * np.cos(h_ave - np.pi / 6) + 0.24 * np.cos(2 * h_ave) + 0.32 * np.cos(
         3 * h_ave + np.pi / 30) - 0.2 * np.cos(4 * h_ave - 63 * np.pi / 180)
     h_ave_deg = h_ave * 180 / np.pi
-    if h_ave_deg < 0:
-        h_ave_deg += 360
-    elif h_ave_deg > 360:
-        h_ave_deg -= 360
+    h_ave_deg = np.where(h_ave_deg < 0, h_ave_deg + 360, np.where(h_ave_deg > 360, h_ave_deg - 360, h_ave_deg))
+    # if h_ave_deg < 0:
+    #     h_ave_deg += 360
+    # elif h_ave_deg > 360:
+    #     h_ave_deg -= 360
     dTheta = 30 * np.exp(-(((h_ave_deg - 275) / 25) ** 2))
     R_C = 2 * np.sqrt(C_ave ** 7 / (C_ave ** 7 + 6103515625))
     S_C = 1 + 0.045 * C_ave
@@ -314,15 +336,13 @@ def _ciede2000(lab_c1, lab_c2):
     return dE_00
 
 
-def my_ciede2000(c1, c2):
-    c1 = np.array(c1)
-    c2 = np.array(c2)
-    return _ciede2000(c1, c2)
+#
+#
 
-#
-#
 # # [ 47.98194319  -3.19681298 -39.3202402 ]
-# if __name__ == '__main__':
+# @profile
+# @profile
+# def test():
 #     #     # print (np.array([0.12156863, 0.46666667, 0.70588235]))
 #     tmp = srgb_to_lrgb(np.array([0.82156863, 0.26666667, 0.30588235]))
 #     print(tmp)
@@ -338,7 +358,34 @@ def my_ciede2000(c1, c2):
 #     print(tmp)
 #     # [ 47.98083149  -3.20353037 -39.33214908]
 #     # [49.87586907 56.02126521 25.91319689]
-#     tmp = my_ciede2000([47.98083149,  -3.20353037, -39.33214908], [49.87586907, 56.02126521, 25.91319689])
-#     print(tmp)
-#     tmp = ciede2000((47.98083149,  -3.20353037, -39.33214908), (49.87586907, 56.02126521, 25.91319689))
+#     tst1 = np.array([[8.65585359, -14.92341376, -27.19993597], [7.88557444, -14.92341376, -27.19993597],
+#                      [6.80631503, -14.92341376, -27.19993597], [5.8400264, -14.92341376, -27.19993597],
+#                      [5.16777997, -14.92341376, -27.19993597], [4.8404815, -14.92341376, -27.19993597],
+#                      [4.86938164, -14.92341376, -27.19993597], [5.24736542, -14.92341376, -27.19993597],
+#                      [5.95157178, -14.92341376, -27.19993597], [6.940364, -14.92341376, -27.19993597],
+#                      [8.13145832, -14.92341376, -27.19993597], [9.40401178, -14.92341376, -27.19993597],
+#                      [10.60710257, -14.92341376, -27.19993597], [11.58348601, -14.92341376, -27.19993597],
+#                      [12.22472905, -14.92341376, -27.19993597], [12.54928295, -14.92341376, -27.19993597],
+#                      [12.72239025, -14.92341376, -27.19993597], [12.98318648, -14.92341376, -27.19993597],
+#                      [13.53866623, -14.92341376, -27.19993597], [14.5140857, -14.92341376, -27.19993597],
+#                      [15.95492491, -14.92341376, -27.19993597], [17.83722747, -14.92341376, -27.19993597],
+#                      [20.01668285, -14.92341376, -27.19993597]])
+#     tst2 = np.array([[10.62033719, -2.5719678, 6.74668999], [10.48619384, -2.5719678, 6.74668999],
+#                      [10.12766472, -2.5719678, 6.74668999], [9.48964405, -2.5719678, 6.74668999],
+#                      [8.62133936, -2.5719678, 6.74668999], [7.64263414, -2.5719678, 6.74668999],
+#                      [6.69438857, -2.5719678, 6.74668999], [5.89927757, -2.5719678, 6.74668999],
+#                      [5.35169782, -2.5719678, 6.74668999], [5.11441282, -2.5719678, 6.74668999],
+#                      [5.22515817, -2.5719678, 6.74668999], [5.69594624, -2.5719678, 6.74668999],
+#                      [6.51727857, -2.5719678, 6.74668999], [7.6711551, -2.5719678, 6.74668999],
+#                      [9.12320656, -2.5719678, 6.74668999], [10.81986763, -2.5719678, 6.74668999],
+#                      [12.65844325, -2.5719678, 6.74668999], [14.46470775, -2.5719678, 6.74668999],
+#                      [15.98793456, -2.5719678, 6.74668999], [16.97289518, -2.5719678, 6.74668999],
+#                      [17.25892277, -2.5719678, 6.74668999], [16.83935866, -2.5719678, 6.74668999],
+#                      [15.85382535, -2.5719678, 6.74668999]])
+#     # tmp = ciede2000([47.98083149, -3.20353037, -39.33214908], [49.87586907, 56.02126521, 25.91319689])
 #
+#     my_calcs = ciede2000(tst1, tst2)
+#     print(my_calcs)
+#
+# if __name__ == '__main__':
+#     test()
