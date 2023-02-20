@@ -240,19 +240,18 @@ def xyz_to_lab(c):
     return xyz_to_lab_d65(c)
 
 
-
-
+# @jit(nopython=True, fastmath=True, cache=True)
 def ciede2000(c1, c2):
     c1 = np.array(c1).reshape(-1, 3)
     c2 = np.asarray(c2).reshape(-1, 3)
-    return _ciede2000(c1, c2)
+    return optimized_ciede2000(c1, c2)
 
 
 # Adapted from https://github.com/lovro-i/CIEDE2000/blob/master/ciede2000.py
 # via The CIEDE2000 Color-Difference Formula: Implementation Notes, Supplementary Test Data, and Mathematical Observations
 # Gaurav Sharma, Wencheng Wu, Edul N. Dalal
 @jit(nopython=True, fastmath=True, cache=True)
-def _ciede2000(lab_c1, lab_c2):
+def optimized_ciede2000(lab_c1, lab_c2):
     L1, a1, b1 = lab_c1[:, 0], lab_c1[:, 1], lab_c1[:, 2]
     L2, a2, b2 = lab_c2[:, 0], lab_c2[:, 1], lab_c2[:, 2]
     C1 = np.sqrt(a1 ** 2 + b1 ** 2)
@@ -309,7 +308,8 @@ def _ciede2000(lab_c1, lab_c2):
     h_ave = h1_ + h2_
 
     h_ave = np.where(np.logical_and(C1C2 != 0, _dh <= np.pi), h_ave / 2,
-                     np.where(np.logical_and(C1C2 != 0, np.logical_and(_dh > np.pi, _sh < 2 * np.pi)), h_ave / 2 + np.pi,
+                     np.where(np.logical_and(C1C2 != 0, np.logical_and(_dh > np.pi, _sh < 2 * np.pi)),
+                              h_ave / 2 + np.pi,
                               np.where(np.logical_and(C1C2 != 0, np.logical_and(_dh > np.pi, _sh >= 2 * np.pi)),
                                        h_ave / 2 - np.pi, h_ave)))
 
@@ -336,8 +336,14 @@ def _ciede2000(lab_c1, lab_c2):
     return dE_00
 
 
-#
-#
+
+def srgb_to_oklab(c):
+    xyz = srgb_to_xyz(c)
+    return xyz_to_oklab(xyz)
+
+def oklab_to_srgb(c):
+    xyz = oklab_to_xyz(c)
+    return xyz_to_srgb(xyz)
 
 # # [ 47.98194319  -3.19681298 -39.3202402 ]
 # @profile
