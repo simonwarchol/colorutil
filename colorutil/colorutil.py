@@ -336,14 +336,23 @@ def optimized_ciede2000(lab_c1, lab_c2):
     return dE_00
 
 
-
 def srgb_to_oklab(c):
     xyz = srgb_to_xyz(c)
     return xyz_to_oklab(xyz)
 
+
 def oklab_to_srgb(c):
     xyz = oklab_to_xyz(c)
     return xyz_to_srgb(xyz)
+
+
+def mix_np(c1, c2, a):
+    return c1 * a + c2 * (1 - a)
+
+
+@jit(nopython=True, cache=True, fastmath=True)
+def mix_numba(c1, c2, a):
+    return c1 * a + c2 * (1 - a)
 
 # # [ 47.98194319  -3.19681298 -39.3202402 ]
 # @profile
