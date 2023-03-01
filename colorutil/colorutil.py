@@ -12,6 +12,12 @@ def lrgb_to_srgb(channel):
     return srgb_channel
 
 
+def hex_to_rgb(hex):
+    if hex.startswith('#'):
+        hex = hex[1:]
+    return np.array(tuple(int(hex[i:i + 2], 16) for i in (0, 2, 4))) / 255.0
+
+
 # // via https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
 # const float
 # // Converts a single srgb channel to rgb
@@ -44,7 +50,7 @@ def xyz_to_lrgb(c):
     return e
 
 
-@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+@jit(nopython=True, fastmath=True, cache=True)
 def xyz_to_oklab(c):
     lms = np.empty(c.shape)
     lms[..., 0] = np.cbrt(0.8189330101 * c[..., 0] + 0.3618667424 * c[..., 1] - 0.1288597137 * c[..., 2])
@@ -344,15 +350,6 @@ def srgb_to_oklab(c):
 def oklab_to_srgb(c):
     xyz = oklab_to_xyz(c)
     return xyz_to_srgb(xyz)
-
-
-def mix_np(c1, c2, a):
-    return c1 * a + c2 * (1 - a)
-
-
-@jit(nopython=True, cache=True, fastmath=True)
-def mix_numba(c1, c2, a):
-    return c1 * a + c2 * (1 - a)
 
 # # [ 47.98194319  -3.19681298 -39.3202402 ]
 # @profile
